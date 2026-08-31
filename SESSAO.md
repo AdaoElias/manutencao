@@ -108,3 +108,35 @@ Isso elimina a classe de problemas dos campos numéricos que motivou a recriaç�
    o `supabase/schema.sql`.
 6. Configurar `.env` com URL + anon key reais.
 7. Publicar no GitHub + ativar GitHub Pages.
+
+---
+
+## Atualizações posteriores (pós-deploy)
+
+### Pagamentos e Contas a Receber (novo módulo)
+- Nova tabela `public.pagamentos` (tipo: dinheiro, cartao, pix, parcelado;
+  status: pendente, pago, atrasado, cancelado; controle de parcelas).
+- Nova página **Contas a Receber** (`src/pages/ContasReceber.jsx`, rota `/contas`):
+  resumo financeiro (total, recebido, pendente, atrasado), filtros por status,
+  CRUD de pagamentos e **registro de parcelas** (x/y).
+- Componente reutilizável **PagamentoModal** (`src/components/PagamentoModal.jsx`).
+- Botão "Receber" em **Serviços** (OS concluída/entregue) e **Vendas**.
+- **Dashboard** ganhou seção de resumo financeiro (recebido / a receber / atrasado).
+
+### Vendas redesenhada como carrinho
+- Modal "Nova Venda" agora funciona como **carrinho de supermercado**:
+  lista produtos cadastrados com preço, botão "Adicionar", controle de
+  quantidade (+/−), remover itens e **total calculado automaticamente**
+  (qtd × preço cadastrado).
+- Salva venda + itens + total em uma única ação; recalcula ao remover itens.
+- Correção: produtos cadastrados passam a ser carregados corretamente para a venda.
+
+### Correções
+- **MoneyInput**: sincronização do valor externo corrigida (evita comportamento
+  que fechava o modal ao digitar valor em Serviços).
+- **Serviços**: `save()` com captura de erro + alert; equipamentos do cliente
+  agora são recarregados ao editar uma OS (antes o campo obrigatório ficava vazio).
+- **Deploy/GitHub Pages**: configuração de *Source = GitHub Actions* e **secrets**
+  (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) necessários para o build não
+  gerar bundle sem chaves (sintoma: tela branca com `supabaseUrl is required`).
+- Roteamento em subcaminho resolvido com `basename` dinâmico em `main.jsx`.

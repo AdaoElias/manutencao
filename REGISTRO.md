@@ -202,13 +202,36 @@ Resumo do que existe neste momento em `C:\DEV\service`:
 - Deploy automático para GitHub Pages configurado.
 - Código publicado no repositório **`AdaoElias/manutencao`**.
 
+### Estrutura atual de `src/`
+```
+src/
+├── main.jsx                 (BrowserRouter com basename dinâmico)
+├── App.jsx                  (rotas + PrivateRoute)
+├── context/AuthContext.jsx
+├── lib/supabase.js, format.js
+├── components/
+│   ├── Layout.jsx
+│   ├── MoneyInput.jsx       (moeda pt-BR, sincronizado)
+│   └── PagamentoModal.jsx   (dinheiro/cartão/PIX/parcelado)
+└── pages/
+    ├── Login.jsx, Dashboard.jsx, Clientes.jsx, Equipamentos.jsx
+    ├── Servicos.jsx (OS + peças), Vendas.jsx (carrinho), Garantias.jsx
+    ├── Produtos.jsx
+    └── ContasReceber.jsx    (pagamentos a receber)
+```
+
 ---
 
 ## 9. Pendências e próximos passos
 
-- [ ] Usuário adicionar os **2 secrets** no repositório GitHub.
-- [ ] Ativar **GitHub Pages (Source: GitHub Actions)** no repo.
-- [ ] Etivar **Auth por e-mail** no Supabase (Authentication → Providers → Email)
+- [ ] (Obrigatório) Adicionar os **2 secrets** no repositório GitHub
+      (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) — sem eles o build gera
+      bundle sem chaves e a app quebra (`supabaseUrl is required`, tela branca).
+- [ ] Confirmar **GitHub Pages (Source: GitHub Actions)** ativo no repo
+      (senão o passo "Setup Pages" do workflow falha).
+- [ ] Confirmar que a tabela `pagamentos` foi criada no Supabase
+      (rodar `supabase/runnable_schema.sql` no SQL Editor).
+- [ ] Ativar **Auth por e-mail** no Supabase (Authentication → Providers → Email)
       e decidir se exige confirmação de e-mail.
 - [ ] Criar conta de usuário no app para começar a usar.
 - [ ] (Opcional) Testar login/uso no link público após o deploy.

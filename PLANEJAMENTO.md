@@ -63,6 +63,7 @@ e políticas RLS (`auth.uid() = user_id`). SQL completo em
 | `vendas` | cliente_id*, descricao, valor_total, data_venda, observacoes |
 | `venda_itens` | venda_id*, produto_id, descricao*, quantidade, valor_unitario, valor_total |
 | `garantias` | equipamento_id*, servico_id, venda_id, data_inicio*, data_fim*, descricao |
+| `pagamentos` | cliente_id, servico_id, venda_id, tipo* (dinheiro/cartao/pix/parcelado), valor_total, valor_pago, parcelas_total, parcelas_pagas, data_vencimento, status (pendente/pago/atrasado/cancelado) |
 
 ---
 
@@ -75,6 +76,7 @@ e políticas RLS (`auth.uid() = user_id`). SQL completo em
 
 ### Dashboard
 - Cards: total de clientes, equipamentos, serviços abertos, garantias ativas.
+- **Resumo financeiro:** recebido, a receber (pendente), atrasados.
 - Lista dos últimos serviços.
 - Lista de garantias a vencer.
 
@@ -99,9 +101,21 @@ e políticas RLS (`auth.uid() = user_id`). SQL completo em
 
 ### Vendas
 - CRUD de venda vinculada a cliente.
-- Adicionar itens (produto ou descrição livre, qtd, valor unitário).
-- **Recalculo automático** do `valor_total`.
+- **Fluxo de carrinho:** lista de produtos cadastrados (com preço) → clicar em
+  "Adicionar" → quantidade ajustável (+/−) → **total calculado automaticamente**
+  (qtd × preço cadastrado).
+- Itens livres/outros podem ser adicionados (descrição + valor).
 - Lista de itens por venda.
+- **Recalculo automático** do `valor_total` ao remover itens.
+
+### Pagamentos / Contas a Receber
+- Página dedicada com tipos de pagamento: **Dinheiro, Cartão, PIX, Parcelado**.
+- Resumo financeiro (total, recebido, pendente, atrasado) + filtros por status.
+- **Parcelado:** define nº de parcelas, vencimento e registra cada parcela
+  individualmente (x/y pagas).
+- Registro de pagamento direto de **Serviços** (OS concluída/entregue) e
+  **Vendas** (botão "Receber").
+- Status: pendente / pago / atrasado / cancelado.
 
 ### Garantias
 - CRUD por equipamento (opcional vínculo com OS/venda).
@@ -128,9 +142,10 @@ React 19  +  Vite 8  +  @supabase/supabase-js  +  react-router-dom  +  vite-plug
 - `src/lib/supabase.js` — cliente Supabase (lê `VITE_SUPABASE_*` do `.env`).
 - `src/lib/format.js` — formatação/parse de moeda e datas pt-BR.
 - `src/context/AuthContext.jsx` — estado de autenticação.
-- `src/components/` — Layout, MoneyInput, (futuro) Modal/Table reutilizáveis.
-- `src/pages/` — uma pasta por tela.
+- `src/components/` — Layout, MoneyInput, PagamentoModal.
+- `src/pages/` — uma pasta por tela (inclui `ContasReceber.jsx`).
 - `supabase/schema.sql` — DDL das tabelas + políticas RLS.
+- `supabase/runnable_schema.sql` — versão limpa (sem comentários) p/ colar no SQL Editor.
 
 ---
 
@@ -155,10 +170,17 @@ React 19  +  Vite 8  +  @supabase/supabase-js  +  react-router-dom  +  vite-plug
 
 - Criar repositório público/privado e fazer push do código (sem `.env` e sem
   `node_modules` — já no `.gitignore`).
-- **GitHub Pages:** Settings → Pages → Source → **GitHub Actions**
-  (ou ramo `gh-pages`) → apontar para a pasta `dist` do build.
-- Atualizar `base` no `vite.config.js` se hospedar em subcaminho
-  (ex.: `https://user.github.io/repo/`).
+- **GitHub Pages:** Settings → Pages → Source → **GitHub Actions** (não
+  "Deploy from a branch") → o workflow `.github/workflows/deploy.yml` faz o
+  build e o deploy automático da pasta `dist`.
+- **Secrets (obrigatórios):** Settings → Secrets and variables → Actions →
+  criar `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. Sem eles o build gera
+  um bundle sem as chaves → a app quebra com `supabaseUrl is required`
+  (tela branca).
+- Configurar **Settings → Pages → Source = GitHub Actions** antes de rodar o
+  workflow (senão o passo "Setup Pages" falha).
+- O `vite.config.js` usa `base: './'` e o `main.jsx` usa `basename` dinâmico
+  para o roteamento funcionar em subcaminho (ex.: `https://user.github.io/repo/`).
 
 ---
 
