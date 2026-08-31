@@ -10,6 +10,7 @@ const navItems = [
   { to: '/vendas', label: 'Vendas', icon: '💰', end: false },
   { to: '/garantias', label: 'Garantias', icon: '🛡️', end: false },
   { to: '/produtos', label: 'Produtos', icon: '📦', end: false },
+  { to: '/contas', label: 'Contas a Receber', icon: '💳', end: false },
 ]
 
 export default function Layout() {

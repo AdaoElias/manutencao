@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { formatMoney, formatDate } from '../lib/format'
+import { Link } from 'react-router-dom'
 
 const statusMap = { aberto: 'aberto', andamento: 'andamento', concluido: 'concluido', entregue: 'entregue' }
 
 export default function Dashboard() {
   const { user } = useAuth()
   const [counts, setCounts] = useState({ clientes: 0, equipamentos: 0, servicos: 0, garantias: 0 })
+  const [finance, setFinance] = useState({ recebido: 0, pendente: 0, atrasado: 0 })
   const [servicos, setServicos] = useState([])
   const [garantias, setGarantias] = useState([])
 
@@ -18,7 +20,7 @@ export default function Dashboard() {
 
   const load = async () => {
     const uid = user.id
-    const [c, e, s, g] = await Promise.all([
+    const [c, e, s, g, pg] = await Promise.all([
       supabase.from('clientes').select('id', { count: 'exact', head: true }).eq('user_id', uid),
       supabase.from('equipamentos').select('id', { count: 'exact', head: true }).eq('user_id', uid),
       supabase
@@ -33,10 +35,17 @@ export default function Dashboard() {
         .eq('user_id', uid)
         .gte('data_fim', new Date().toISOString().split('T')[0])
         .order('data_fim', { ascending: true }),
+      supabase.from('pagamentos').select('status, valor_total, valor_pago').eq('user_id', uid),
     ])
     setCounts({ clientes: c.count, equipamentos: e.count, servicos: s.count, garantias: g.count })
     setServicos(s.data ?? [])
     setGarantias(g.data ?? [])
+
+    const pags = pg.data ?? []
+    const recebido = pags.filter((p) => p.status === 'pago').reduce((sum, p) => sum + (p.valor_total || 0), 0)
+    const pendente = pags.filter((p) => p.status === 'pendente').reduce((sum, p) => sum + (p.valor_pago || 0), 0)
+    const atrasado = pags.filter((p) => p.status === 'atrasado').reduce((sum, p) => sum + (p.valor_pago || 0), 0)
+    setFinance({ recebido, pendente, atrasado })
   }
 
   return (
@@ -70,6 +79,34 @@ export default function Dashboard() {
             <span className="card-number">{counts.garantias}</span>
             <span className="card-label">Garantias Ativas</span>
           </div>
+        </div>
+      </div>
+
+      <h3 style={{ margin: '0 0 12px', color: '#555' }}>Financeiro</h3>
+      <div className="dashboard-grid">
+        <div className="card">
+          <div style={{ fontSize: 28 }}>✅</div>
+          <div>
+            <span className="card-number" style={{ color: '#28a745' }}>{formatMoney(finance.recebido)}</span>
+            <span className="card-label">Recebido</span>
+          </div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 28 }}>⏳</div>
+          <div>
+            <span className="card-number" style={{ color: '#ffc107' }}>{formatMoney(finance.pendente)}</span>
+            <span className="card-label">A Receber (Pendente)</span>
+          </div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 28 }}>⚠️</div>
+          <div>
+            <span className="card-number" style={{ color: '#dc3545' }}>{formatMoney(finance.atrasado)}</span>
+            <span className="card-label">Atrasados</span>
+          </div>
+        </div>
+        <div className="card" style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <Link to="/contas" className="btn btn-primary">Ver Contas a Receber →</Link>
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { formatMoney } from '../lib/format'
 import MoneyInput from '../components/MoneyInput'
+import PagamentoModal from '../components/PagamentoModal'
 
 const statusMap = { aberto: 'aberto', andamento: 'andamento', concluido: 'concluido', entregue: 'entregue' }
 const TIPOS = ['Manutenção', 'Revisão', 'Venda', 'Garantia', 'Orçamento', 'Outros']
@@ -25,6 +26,7 @@ export default function Servicos() {
   const [editId, setEditId] = useState(null)
   const [pecasModal, setPecasModal] = useState(null)
   const [statusModal, setStatusModal] = useState(null)
+  const [pagamentoModal, setPagamentoModal] = useState(null)
 
   const load = async () => {
     const [sv, cl] = await Promise.all([
@@ -112,6 +114,13 @@ export default function Servicos() {
 
   const showStatus = (s) => setStatusModal({ id: s.id, status: s.status })
 
+  const showPagamento = (s) => setPagamentoModal({
+    valorTotal: s.valor_total,
+    clienteId: s.cliente_id,
+    servicoId: s.id,
+    descricao: `OS #${String(s.id).slice(0, 8)} — ${s.tipo_servico || 'Serviço'}`,
+  })
+
   const changeStatus = async (e) => {
     e.preventDefault()
     const newStatus = e.target.status.value
@@ -154,6 +163,9 @@ export default function Servicos() {
                     <button className="btn btn-sm btn-primary" onClick={() => openEdit(s)}>Editar</button>
                     <button className="btn btn-sm btn-success" onClick={() => showPecas(s)}>Peças</button>
                     <button className="btn btn-sm btn-warning" onClick={() => showStatus(s)}>Status</button>
+                    {(s.status === 'concluido' || s.status === 'entregue') && s.valor_total > 0 && (
+                      <button className="btn btn-sm btn-success" onClick={() => showPagamento(s)}>Receber</button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -262,6 +274,18 @@ export default function Servicos() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Pagamento */}
+      {pagamentoModal && (
+        <PagamentoModal
+          valorTotal={pagamentoModal.valorTotal}
+          clienteId={pagamentoModal.clienteId}
+          servicoId={pagamentoModal.servicoId}
+          descricao={pagamentoModal.descricao}
+          onClose={() => setPagamentoModal(null)}
+          onSaved={load}
+        />
       )}
     </div>
   )

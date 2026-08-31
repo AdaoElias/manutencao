@@ -9,6 +9,7 @@ import Servicos from './pages/Servicos'
 import Vendas from './pages/Vendas'
 import Garantias from './pages/Garantias'
 import Produtos from './pages/Produtos'
+import ContasReceber from './pages/ContasReceber'
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth()
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="vendas" element={<Vendas />} />
         <Route path="garantias" element={<Garantias />} />
         <Route path="produtos" element={<Produtos />} />
+        <Route path="contas" element={<ContasReceber />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

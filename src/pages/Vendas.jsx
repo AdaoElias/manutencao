@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { formatMoney, formatDate } from '../lib/format'
 import MoneyInput from '../components/MoneyInput'
+import PagamentoModal from '../components/PagamentoModal'
 
 export default function Vendas() {
   const { user } = useAuth()
@@ -13,6 +14,7 @@ export default function Vendas() {
   const [form, setForm] = useState({ id: null, cliente_id: '', descricao: '', observacoes: '' })
   const [saving, setSaving] = useState(false)
   const [itensModal, setItensModal] = useState(null)
+  const [pagamentoModal, setPagamentoModal] = useState(null)
   const [produtos, setProdutos] = useState([])
 
   const load = async () => {
@@ -57,6 +59,13 @@ export default function Vendas() {
     loadItens(v.id)
   }
 
+  const showPagamento = (v) => setPagamentoModal({
+    valorTotal: v.valor_total,
+    clienteId: v.cliente_id,
+    vendaId: v.id,
+    descricao: `Venda #${String(v.id).slice(0, 8)} — ${v.descricao || 'Venda'}`,
+  })
+
   const loadItens = async (id) => {
     const { data } = await supabase.from('venda_itens').select('*').eq('venda_id', id).eq('user_id', user.id)
     setItensModal((m) => ({ ...m, itens: data ?? [] }))
@@ -97,6 +106,9 @@ export default function Vendas() {
                   <td className="actions">
                     <button className="btn btn-sm btn-primary" onClick={() => openEdit(v)}>Editar</button>
                     <button className="btn btn-sm btn-success" onClick={() => showItens(v)}>Itens</button>
+                    {v.valor_total > 0 && (
+                      <button className="btn btn-sm btn-success" onClick={() => showPagamento(v)}>Receber</button>
+                    )}
                     <button className="btn btn-sm btn-danger" onClick={() => remove(v.id)}>Excluir</button>
                   </td>
                 </tr>
@@ -144,6 +156,17 @@ export default function Vendas() {
         <ItensModal
           data={itensModal}
           onClose={() => setItensModal(null)}
+        />
+      )}
+
+      {pagamentoModal && (
+        <PagamentoModal
+          valorTotal={pagamentoModal.valorTotal}
+          clienteId={pagamentoModal.clienteId}
+          vendaId={pagamentoModal.vendaId}
+          descricao={pagamentoModal.descricao}
+          onClose={() => setPagamentoModal(null)}
+          onSaved={load}
         />
       )}
     </div>
