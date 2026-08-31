@@ -2,20 +2,21 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { formatMoney, formatDate } from '../lib/format'
-import MoneyInput from '../components/MoneyInput'
 import PagamentoModal from '../components/PagamentoModal'
 
 export default function Vendas() {
   const { user } = useAuth()
   const [vendas, setVendas] = useState([])
   const [clientes, setClientes] = useState([])
+  const [produtos, setProdutos] = useState([])
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ id: null, cliente_id: '', descricao: '', observacoes: '' })
+  const [carrinho, setCarrinho] = useState([])
   const [saving, setSaving] = useState(false)
-  const [itensModal, setItensModal] = useState(null)
+  const [erro, setErro] = useState('')
   const [pagamentoModal, setPagamentoModal] = useState(null)
-  const [produtos, setProdutos] = useState([])
+  const [itensModal, setItensModal] = useState(null)
 
   const load = async () => {
     const [vd, cl, pr] = await Promise.all([
@@ -34,29 +35,21 @@ export default function Vendas() {
     `${v.descricao} ${v.clientes?.nome}`.toLowerCase().includes(search.toLowerCase())
   )
 
-  const openNew = () => { setForm({ id: null, cliente_id: '', descricao: '', observacoes: '' }); setOpen(true) }
-  const openEdit = (v) => { setForm({ id: v.id, cliente_id: v.cliente_id, descricao: v.descricao || '', observacoes: v.observacoes || '' }); setOpen(true) }
-
-  const save = async (e) => {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      const payload = { cliente_id: form.cliente_id, descricao: form.descricao, observacoes: form.observacoes }
-      if (form.id) {
-        await supabase.from('vendas').update(payload).eq('id', form.id).eq('user_id', user.id)
-      } else {
-        await supabase.from('vendas').insert({ user_id: user.id, ...payload })
-      }
-      setOpen(false)
-      load()
-    } finally {
-      setSaving(false)
-    }
+  const openNew = () => {
+    setForm({ id: null, cliente_id: '', descricao: '', observacoes: '' })
+    setCarrinho([])
+    setErro('')
+    setOpen(true)
   }
 
-  const showItens = (v) => {
-    setItensModal({ venda: v, itens: [], produtos, loadItens: (id) => loadItens(id), refresh: load })
+  const abrirItens = (v) => {
+    setItensModal({ venda: v, itens: [], loadItens: (id) => loadItens(id), refresh: load })
     loadItens(v.id)
+  }
+
+  const loadItens = async (id) => {
+    const { data } = await supabase.from('venda_itens').select('*').eq('venda_id', id).eq('user_id', user.id)
+    setItensModal((m) => ({ ...m, itens: data ?? [] }))
   }
 
   const showPagamento = (v) => setPagamentoModal({
@@ -66,9 +59,92 @@ export default function Vendas() {
     descricao: `Venda #${String(v.id).slice(0, 8)} — ${v.descricao || 'Venda'}`,
   })
 
-  const loadItens = async (id) => {
-    const { data } = await supabase.from('venda_itens').select('*').eq('venda_id', id).eq('user_id', user.id)
-    setItensModal((m) => ({ ...m, itens: data ?? [] }))
+  const addProdutoAoCarrinho = (produto) => {
+    if (!produto || !produto.id) return
+    setCarrinho((cart) => {
+      const existente = cart.find((i) => i.produto_id === produto.id)
+      if (existente) {
+        return cart.map((i) =>
+          i.produto_id === produto.id
+            ? { ...i, quantidade: i.quantidade + 1, valor_total: (i.quantidade + 1) * i.valor_unitario }
+            : i
+        )
+      }
+      const qtd = 1
+      return [...cart, {
+        key: produto.id,
+        produto_id: produto.id,
+        descricao: `${produto.nome}${produto.descricao ? ' - ' + produto.descricao : ''}`,
+        quantidade: qtd,
+        valor_unitario: Number(produto.preco_venda) || 0,
+        valor_total: qtd * (Number(produto.preco_venda) || 0),
+      }]
+    })
+  }
+
+  const alterarQtd = (produtoId, delta) => {
+    setCarrinho((cart) => cart
+      .map((i) => {
+        if (i.produto_id !== produtoId) return i
+        const novaQtd = Math.max(1, i.quantidade + delta)
+        return { ...i, quantidade: novaQtd, valor_total: novaQtd * i.valor_unitario }
+      })
+      .filter((i) => i.quantidade > 0))
+  }
+
+  const removerItem = (produtoId) => {
+    setCarrinho((cart) => cart.filter((i) => i.produto_id !== produtoId))
+  }
+
+  const subtotal = carrinho.reduce((s, i) => s + (i.valor_total || 0), 0)
+
+  const save = async (e) => {
+    e.preventDefault()
+    setErro('')
+    if (!form.cliente_id) { setErro('Selecione um cliente.'); return }
+    if (carrinho.length === 0) { setErro('Adicione ao menos um produto ao carrinho.'); return }
+    setSaving(true)
+    try {
+      let vendaId = form.id
+      const dados = {
+        cliente_id: form.cliente_id,
+        descricao: form.descricao,
+        observacoes: form.observacoes,
+        valor_total: subtotal,
+      }
+      if (vendaId) {
+        const { error } = await supabase.from('vendas').update(dados).eq('id', vendaId).eq('user_id', user.id)
+        if (error) throw error
+      } else {
+        const { data, error } = await supabase.from('vendas').insert({ user_id: user.id, ...dados }).select('id').single()
+        if (error) throw error
+        vendaId = data.id
+      }
+
+      if (form.id) {
+        await supabase.from('venda_itens').delete().eq('venda_id', vendaId).eq('user_id', user.id)
+      }
+
+      const itens = carrinho.map((i) => ({
+        venda_id: vendaId,
+        user_id: user.id,
+        produto_id: i.produto_id,
+        descricao: i.descricao,
+        quantidade: i.quantidade,
+        valor_unitario: i.valor_unitario,
+        valor_total: i.valor_total,
+      }))
+      const { error: itErr } = await supabase.from('venda_itens').insert(itens)
+      if (itErr) throw itErr
+
+      setOpen(false)
+      setCarrinho([])
+      load()
+    } catch (err) {
+      setErro('Erro ao salvar venda: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const remove = async (id) => {
@@ -86,11 +162,12 @@ export default function Vendas() {
         </div>
         <button className="btn btn-primary" onClick={openNew}>+ Nova Venda</button>
       </div>
+
       <div className="card">
         <div className="table-wrap">
           <table className="table">
             <thead>
-              <tr><th>ID</th><th>Cliente</th><th>Descrição</th><th>Data</th><th>Total</th><th style={{ width: 110 }}>Ações</th></tr>
+              <tr><th>ID</th><th>Cliente</th><th>Descrição</th><th>Data</th><th>Total</th><th style={{ width: 140 }}>Ações</th></tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
@@ -104,8 +181,7 @@ export default function Vendas() {
                   <td>{formatDate(v.data_venda)}</td>
                   <td>{formatMoney(v.valor_total)}</td>
                   <td className="actions">
-                    <button className="btn btn-sm btn-primary" onClick={() => openEdit(v)}>Editar</button>
-                    <button className="btn btn-sm btn-success" onClick={() => showItens(v)}>Itens</button>
+                    <button className="btn btn-sm btn-success" onClick={() => abrirItens(v)}>Itens</button>
                     {v.valor_total > 0 && (
                       <button className="btn btn-sm btn-success" onClick={() => showPagamento(v)}>Receber</button>
                     )}
@@ -120,24 +196,88 @@ export default function Vendas() {
 
       {open && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
-          <div className="modal">
+          <div className="modal modal-lg">
             <div className="modal-header">
-              <h3>{form.id ? 'Editar Venda' : 'Nova Venda'}</h3>
+              <h3>Nova Venda</h3>
               <button className="modal-close" onClick={() => setOpen(false)}>&times;</button>
             </div>
             <form onSubmit={save}>
               <div className="modal-body">
-                <div className="form-group">
-                  <label>Cliente *</label>
-                  <select required value={form.cliente_id} onChange={(e) => setForm({ ...form, cliente_id: e.target.value })}>
-                    <option value="">Selecione...</option>
-                    {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </select>
+                {erro && <div className="alert alert-danger">{erro}</div>}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Cliente *</label>
+                    <select required value={form.cliente_id} onChange={(e) => setForm({ ...form, cliente_id: e.target.value })}>
+                      <option value="">Selecione...</option>
+                      {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Descrição</label>
+                    <input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Descrição</label>
-                  <input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
-                </div>
+
+                <h4 className="carrinho-title">Produtos Cadastrados</h4>
+                {produtos.length === 0 ? (
+                  <p className="text-center" style={{ color: '#888', padding: '12px 0' }}>
+                    Nenhum produto cadastrado. Cadastre produtos na aba Produtos.
+                  </p>
+                ) : (
+                  <div className="produto-grid">
+                    {produtos.map((p) => (
+                      <div className="produto-card" key={p.id}>
+                        <div className="produto-info">
+                          <strong>{p.nome}</strong>
+                          {p.descricao && <span className="produto-desc">{p.descricao}</span>}
+                          <span className="produto-preco">{formatMoney(p.preco_venda)}</span>
+                        </div>
+                        <button type="button" className="btn btn-sm btn-primary" onClick={() => addProdutoAoCarrinho(p)}>
+                          + Adicionar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <h4 className="carrinho-title">Carrinho</h4>
+                {carrinho.length === 0 ? (
+                  <p className="text-center" style={{ color: '#888', padding: '12px 0' }}>
+                    Carrinho vazio. Clique em "Adicionar" em um produto acima.
+                  </p>
+                ) : (
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr><th>Produto</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th style={{ width: 150 }}></th></tr>
+                      </thead>
+                      <tbody>
+                        {carrinho.map((i) => (
+                          <tr key={i.produto_id}>
+                            <td>{i.descricao}</td>
+                            <td>
+                              <div className="qty-control">
+                                <button type="button" className="btn btn-sm btn-secondary" onClick={() => alterarQtd(i.produto_id, -1)}>−</button>
+                                <span>{i.quantidade}</span>
+                                <button type="button" className="btn btn-sm btn-secondary" onClick={() => alterarQtd(i.produto_id, 1)}>+</button>
+                              </div>
+                            </td>
+                            <td>{formatMoney(i.valor_unitario)}</td>
+                            <td>{formatMoney(i.valor_total)}</td>
+                            <td><button type="button" className="btn btn-sm btn-danger" onClick={() => removerItem(i.produto_id)}>Remover</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan={3} className="text-right"><strong>Total</strong></td>
+                          <td colSpan={2}><strong>{formatMoney(subtotal)}</strong></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
                 <div className="form-group">
                   <label>Observações</label>
                   <textarea value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} />
@@ -145,7 +285,7 @@ export default function Vendas() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Salvando...' : 'Salvar Venda'}</button>
               </div>
             </form>
           </div>
@@ -153,10 +293,7 @@ export default function Vendas() {
       )}
 
       {itensModal && (
-        <ItensModal
-          data={itensModal}
-          onClose={() => setItensModal(null)}
-        />
+        <ItensModal data={itensModal} onClose={() => setItensModal(null)} />
       )}
 
       {pagamentoModal && (
@@ -175,51 +312,23 @@ export default function Vendas() {
 
 function ItensModal({ data, onClose }) {
   const { user } = useAuth()
-  const [addOpen, setAddOpen] = useState(false)
-  const [form, setForm] = useState({ produto_id: '', descricao: '', quantidade: 1, valor_unitario: 0 })
   const vendaId = data.venda.id
-
-  const recomputeTotal = async () => {
-    const { data: itens } = await supabase.from('venda_itens').select('valor_total').eq('venda_id', vendaId)
-    const total = (itens || []).reduce((s, i) => s + (i.valor_total || 0), 0)
-    await supabase.from('vendas').update({ valor_total: total }).eq('id', vendaId).eq('user_id', user.id)
-    data.refresh()
-  }
-
-  const addItem = async (e) => {
-    e.preventDefault()
-    const vTotal = form.quantidade * form.valor_unitario
-    await supabase.from('venda_itens').insert({
-      venda_id: vendaId, user_id: user.id,
-      produto_id: form.produto_id || null,
-      descricao: form.descricao, quantidade: form.quantidade,
-      valor_unitario: form.valor_unitario, valor_total: vTotal,
-    })
-    recomputeTotal()
-    setAddOpen(false)
-    setForm({ produto_id: '', descricao: '', quantidade: 1, valor_unitario: 0 })
-    data.loadItens(vendaId)
-  }
+  const itens = data.itens || []
+  const total = itens.reduce((s, i) => s + (i.valor_total || 0), 0)
 
   const removeItem = async (id) => {
     if (!confirm('Excluir este item?')) return
-    await supabase.from('venda_itens').delete().eq('id', id)
-    recomputeTotal()
+    await supabase.from('venda_itens').delete().eq('id', id).eq('user_id', user.id)
     data.loadItens(vendaId)
   }
 
-  const selectProduto = (produtoId) => {
-    const p = (data.produtos || []).find((x) => x.id === produtoId)
-    setForm((f) => ({
-      ...f,
-      produto_id: produtoId,
-      descricao: p ? `${p.nome}${p.descricao ? ' - ' + p.descricao : ''}` : f.descricao,
-      valor_unitario: p ? p.preco_venda : f.valor_unitario,
-    }))
+  const recompute = async () => {
+    const { data: its } = await supabase.from('venda_itens').select('valor_total').eq('venda_id', vendaId).eq('user_id', user.id)
+    const t = (its || []).reduce((s, i) => s + (i.valor_total || 0), 0)
+    await supabase.from('vendas').update({ valor_total: t }).eq('id', vendaId).eq('user_id', user.id)
+    data.refresh()
+    data.loadItens(vendaId)
   }
-
-  const itens = data.itens || []
-  const total = itens.reduce((s, i) => s + (i.valor_total || 0), 0)
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -231,10 +340,9 @@ function ItensModal({ data, onClose }) {
         <div className="modal-body">
           <div className="toolbar">
             <strong>Total: {formatMoney(total)}</strong>
-            <button className="btn btn-sm btn-success" onClick={() => setAddOpen(true)}>+ Add Item</button>
           </div>
           <table className="table">
-            <thead><tr><th>Descrição</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th style={{ width: 60 }}></th></tr></thead>
+            <thead><tr><th>Produto</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th style={{ width: 60 }}></th></tr></thead>
             <tbody>
               {itens.length === 0 && <tr><td colSpan={5} className="text-center">Nenhum item</td></tr>}
               {itens.map((i) => (
@@ -243,45 +351,15 @@ function ItensModal({ data, onClose }) {
                   <td>{i.quantidade}</td>
                   <td>{formatMoney(i.valor_unitario)}</td>
                   <td>{formatMoney(i.valor_total)}</td>
-                  <td><button className="btn btn-sm btn-danger" onClick={() => removeItem(i.id)}>Excluir</button></td>
+                  <td><button className="btn btn-sm btn-danger" onClick={() => { removeItem(i.id); recompute() }}>Excluir</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {addOpen && (
-          <form onSubmit={addItem}>
-            <div className="modal-body" style={{ borderTop: '1px solid #eee', paddingTop: 16 }}>
-              <div className="form-group">
-                <label>Produto</label>
-                <select value={form.produto_id} onChange={(e) => selectProduto(e.target.value)}>
-                  <option value="">Selecione um produto (opcional)...</option>
-                  {(data.produtos || []).map((p) => (
-                    <option key={p.id} value={p.id}>{p.nome} — {formatMoney(p.preco_venda)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Descrição *</label>
-                <input required value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Quantidade</label>
-                  <input type="number" min="1" value={form.quantidade} onChange={(e) => setForm({ ...form, quantidade: parseFloat(e.target.value) || 1 })} />
-                </div>
-                <div className="form-group">
-                  <label>Valor Unitário</label>
-                  <MoneyInput value={form.valor_unitario} onChange={(v) => setForm({ ...form, valor_unitario: v })} />
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setAddOpen(false)}>Cancelar</button>
-              <button type="submit" className="btn btn-primary">Adicionar</button>
-            </div>
-          </form>
-        )}
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Fechar</button>
+        </div>
       </div>
     </div>
   )

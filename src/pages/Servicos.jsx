@@ -48,8 +48,8 @@ export default function Servicos() {
     descricao_problema: '', descricao_servico: '', valor_mao_obra: 0, observacoes: '',
   }
 
-  const openNew = () => { setEditId(null); setForm(emptyForm); setOpen(true) }
-  const openEdit = (s) => {
+  const openNew = () => { setEditId(null); setForm(emptyForm); setEquipOptions([]); setOpen(true) }
+  const openEdit = async (s) => {
     setEditId(s.id)
     setForm({
       cliente_id: s.cliente_id, equipamento_id: s.equipamento_id, tipo_servico: s.tipo_servico || '',
@@ -57,6 +57,8 @@ export default function Servicos() {
       descricao_servico: s.descricao_servico || '', valor_mao_obra: s.valor_mao_obra || 0,
       observacoes: s.observacoes || '',
     })
+    const eqs = await loadEquipByCliente(s.cliente_id)
+    setEquipOptions(eqs)
     setOpen(true)
   }
 
@@ -86,17 +88,21 @@ export default function Servicos() {
         cliente_id: form.cliente_id, equipamento_id: form.equipamento_id,
         tipo_servico: form.tipo_servico, relato: form.relato,
         descricao_problema: form.descricao_problema, descricao_servico: form.descricao_servico,
-        valor_mao_obra: form.valor_mao_obra, observacoes: form.observacoes,
+        valor_mao_obra: Number(form.valor_mao_obra) || 0, observacoes: form.observacoes,
         status: 'aberto',
       }
+      let error
       if (editId) {
         delete payload.status
-        await supabase.from('servicos').update(payload).eq('id', editId).eq('user_id', user.id)
+        ;({ error } = await supabase.from('servicos').update(payload).eq('id', editId).eq('user_id', user.id))
       } else {
-        await supabase.from('servicos').insert({ user_id: user.id, ...payload })
+        ;({ error } = await supabase.from('servicos').insert({ user_id: user.id, ...payload }))
       }
+      if (error) throw error
       setOpen(false)
       load()
+    } catch (err) {
+      alert('Erro ao salvar o serviço: ' + (err.message || err))
     } finally {
       setSaving(false)
     }

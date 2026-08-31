@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { parseMoney } from '../lib/format'
 
 export default function MoneyInput({ value, onChange, required, name }) {
   const [text, setText] = useState(value ? String(value).replace('.', ',') : '')
+
+  useEffect(() => {
+    setText(value === 0 || value === null || value === undefined ? '' : String(value).replace('.', ','))
+  }, [value])
 
   const handleChange = (e) => {
     let raw = e.target.value

@@ -200,6 +200,31 @@ body {
 
 .toolbar-filters { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* ---------- Carrinho / Vendas ---------- */
+.modal-lg { max-width: 720px; }
+.carrinho-title { font-size: 14px; font-weight: 600; color: #555; margin: 20px 0 10px; }
+.produto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.produto-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafbfc;
+}
+.produto-info { display: flex; flex-direction: column; gap: 2px; }
+.produto-desc { font-size: 12px; color: #888; }
+.produto-preco { font-weight: 700; color: #28a745; margin-top: 4px; }
+.qty-control { display: flex; align-items: center; gap: 8px; }
+.qty-control span { min-width: 24px; text-align: center; font-weight: 600; }
+
 /* ---------- Botões ---------- */
 .btn {
   display: inline-flex;
