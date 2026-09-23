@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
+const normalize = (v = '') =>
+  v.trim().replace(/\s+/g, ' ').split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+
 export default function Equipamentos() {
   const { user } = useAuth()
   const [equipamentos, setEquipamentos] = useState([])
@@ -26,6 +29,9 @@ export default function Equipamentos() {
     [e.tipo, e.marca, e.modelo, e.clientes?.nome].join(' ').toLowerCase().includes(search.toLowerCase())
   )
 
+  const tiposUnicos = [...new Set(equipamentos.map((e) => normalize(e.tipo)).filter(Boolean))].sort()
+  const marcasUnicas = [...new Set(equipamentos.map((e) => normalize(e.marca)).filter(Boolean))].sort()
+
   const openEdit = (e) => {
     setForm({ id: e.id, cliente_id: e.cliente_id, tipo: e.tipo, marca: e.marca || '', modelo: e.modelo || '', numero_serie: e.numero_serie || '', observacoes: e.observacoes || '' })
     setOpen(true)
@@ -40,7 +46,14 @@ export default function Equipamentos() {
     e.preventDefault()
     setSaving(true)
     try {
-      const payload = { cliente_id: form.cliente_id, tipo: form.tipo, marca: form.marca, modelo: form.modelo, numero_serie: form.numero_serie, observacoes: form.observacoes }
+      const payload = {
+        cliente_id: form.cliente_id,
+        tipo: normalize(form.tipo),
+        marca: normalize(form.marca),
+        modelo: form.modelo.trim(),
+        numero_serie: form.numero_serie.trim(),
+        observacoes: form.observacoes,
+      }
       if (form.id) {
         await supabase.from('equipamentos').update(payload).eq('id', form.id).eq('user_id', user.id)
       } else {
@@ -114,13 +127,19 @@ export default function Equipamentos() {
                 <div className="form-row">
                   <div className="form-group">
                     <label>Tipo *</label>
-                    <input required value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })} />
+                    <input required list="tipos-unicos" value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })} />
                   </div>
                   <div className="form-group">
                     <label>Marca</label>
-                    <input value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} />
+                    <input list="marcas-unicas" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} />
                   </div>
                 </div>
+                <datalist id="tipos-unicos">
+                  {tiposUnicos.map((t) => <option key={t} value={t} />)}
+                </datalist>
+                <datalist id="marcas-unicas">
+                  {marcasUnicas.map((m) => <option key={m} value={m} />)}
+                </datalist>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Modelo</label>
