@@ -20,7 +20,7 @@ export default function Vendas() {
 
   const load = async () => {
     const [vd, cl, pr] = await Promise.all([
-      supabase.from('vendas').select('*, clientes(nome)').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('vendas').select('*, clientes(nome)').eq('user_id', user.id).order('data_venda', { ascending: false }),
       supabase.from('clientes').select('id, nome').eq('user_id', user.id).order('nome'),
       supabase.from('produtos').select('id, nome, descricao, preco_venda').eq('user_id', user.id).order('nome'),
     ])

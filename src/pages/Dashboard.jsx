@@ -28,7 +28,7 @@ export default function Dashboard() {
         .select('id, cliente_id, status, valor_total, clientes(nome)', { count: 'exact' })
         .eq('user_id', uid)
         .in('status', ['aberto', 'andamento'])
-        .order('created_at', { ascending: false }),
+        .order('data_abertura', { ascending: false }),
       supabase
         .from('garantias')
         .select('id, data_fim, equipamentos(tipo, marca)', { count: 'exact' })
@@ -42,9 +42,9 @@ export default function Dashboard() {
     setGarantias(g.data ?? [])
 
     const pags = pg.data ?? []
-    const recebido = pags.filter((p) => p.status === 'pago').reduce((sum, p) => sum + (p.valor_total || 0), 0)
-    const pendente = pags.filter((p) => p.status === 'pendente').reduce((sum, p) => sum + (p.valor_pago || 0), 0)
-    const atrasado = pags.filter((p) => p.status === 'atrasado').reduce((sum, p) => sum + (p.valor_pago || 0), 0)
+    const recebido = pags.filter((p) => p.status !== 'cancelado').reduce((sum, p) => sum + (p.valor_pago || 0), 0)
+    const pendente = pags.filter((p) => p.status === 'pendente').reduce((sum, p) => sum + ((p.valor_total || 0) - (p.valor_pago || 0)), 0)
+    const atrasado = pags.filter((p) => p.status === 'atrasado').reduce((sum, p) => sum + ((p.valor_total || 0) - (p.valor_pago || 0)), 0)
     setFinance({ recebido, pendente, atrasado })
   }
 

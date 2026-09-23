@@ -42,9 +42,9 @@ export default function ContasReceber() {
 
   const totals = {
     total: filtered.reduce((s, p) => s + (p.valor_total || 0), 0),
-    recebido: filtered.filter((p) => p.status === 'pago').reduce((s, p) => s + (p.valor_total || 0), 0),
-    pendente: filtered.filter((p) => p.status === 'pendente').reduce((s, p) => s + (p.valor_pago || 0), 0),
-    atrasado: filtered.filter((p) => p.status === 'atrasado').reduce((s, p) => s + (p.valor_pago || 0), 0),
+    recebido: filtered.filter((p) => p.status !== 'cancelado').reduce((s, p) => s + (p.valor_pago || 0), 0),
+    pendente: filtered.filter((p) => p.status === 'pendente').reduce((s, p) => s + ((p.valor_total || 0) - (p.valor_pago || 0)), 0),
+    atrasado: filtered.filter((p) => p.status === 'atrasado').reduce((s, p) => s + ((p.valor_total || 0) - (p.valor_pago || 0)), 0),
   }
 
   const emptyForm = {
@@ -99,7 +99,13 @@ export default function ContasReceber() {
   }
 
   const marcarPago = async (id) => {
-    await supabase.from('pagamentos').update({ status: 'pago', parcelas_pagas: pagamentos.find((p) => p.id === id)?.parcelas_total || 1 }).eq('id', id).eq('user_id', user.id)
+    const pg = pagamentos.find((p) => p.id === id)
+    if (!pg) return
+    await supabase.from('pagamentos').update({
+      status: 'pago',
+      valor_pago: pg.valor_total,
+      parcelas_pagas: pg.parcelas_total || 1,
+    }).eq('id', id).eq('user_id', user.id)
     load()
   }
 
@@ -111,9 +117,11 @@ export default function ContasReceber() {
     if (!pg) return
     const novasPagas = pg.parcelas_pagas + 1
     const status = novasPagas >= pg.parcelas_total ? 'pago' : 'pendente'
-    await supabase.from('pagamentos').update({ parcelas_pagas: novasPagas, status }).eq('id', pagamentoId).eq('user_id', user.id)
+    const valorParcela = pg.valor_total / (pg.parcelas_total || 1)
+    const novoValorPago = valorParcela * novasPagas
+    await supabase.from('pagamentos').update({ parcelas_pagas: novasPagas, status, valor_pago: novoValorPago }).eq('id', pagamentoId).eq('user_id', user.id)
     load()
-    setParcelasModal({ ...pg, parcelas_pagas: novasPagas, status })
+    setParcelasModal({ ...pg, parcelas_pagas: novasPagas, status, valor_pago: novoValorPago })
   }
 
   return (

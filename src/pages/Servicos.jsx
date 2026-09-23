@@ -34,7 +34,7 @@ export default function Servicos() {
         .from('servicos')
         .select('*, clientes(nome), equipamentos(tipo, marca, modelo)')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false }),
+        .order('data_abertura', { ascending: false }),
       supabase.from('clientes').select('id, nome').eq('user_id', user.id).order('nome'),
     ])
     setServicos(sv.data ?? [])
