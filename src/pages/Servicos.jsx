@@ -7,6 +7,13 @@ import PagamentoModal from '../components/PagamentoModal'
 
 const statusMap = { aberto: 'aberto', andamento: 'andamento', concluido: 'concluido', entregue: 'entregue' }
 const TIPOS = ['Manutenção', 'Revisão', 'Venda', 'Garantia', 'Orçamento', 'Outros']
+const GARANTIA_SERVICO_DIAS = 30
+
+const addDays = (dateStr, days) => {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
 const RELATOS = [
   'Computador lento', 'Superaquecimento', 'Tela azul (BSOD)', 'Falha no disco rígido',
   'Problemas com drivers', 'Computador não liga', 'Reinicialização inesperada',
@@ -135,6 +142,35 @@ export default function Servicos() {
       .update({ status: newStatus, data_conclusao: newStatus === 'concluido' ? new Date().toISOString() : null })
       .eq('id', statusModal.id)
       .eq('user_id', user.id)
+
+    if (newStatus === 'concluido' || newStatus === 'entregue') {
+      const { data: sv } = await supabase
+        .from('servicos')
+        .select('equipamento_id, tipo_servico')
+        .eq('id', statusModal.id)
+        .eq('user_id', user.id)
+        .single()
+      if (sv?.equipamento_id) {
+        const { data: existente } = await supabase
+          .from('garantias')
+          .select('id')
+          .eq('servico_id', statusModal.id)
+          .eq('user_id', user.id)
+          .limit(1)
+        if (!existente || existente.length === 0) {
+          const hoje = new Date().toISOString().split('T')[0]
+          await supabase.from('garantias').insert({
+            user_id: user.id,
+            equipamento_id: sv.equipamento_id,
+            servico_id: statusModal.id,
+            data_inicio: hoje,
+            data_fim: addDays(hoje, GARANTIA_SERVICO_DIAS),
+            descricao: `Garantia de serviço${sv.tipo_servico ? ' — ' + sv.tipo_servico : ''}`,
+          })
+        }
+      }
+    }
+
     setStatusModal(null)
     load()
   }

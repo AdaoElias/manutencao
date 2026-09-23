@@ -7,6 +7,10 @@ create table if not exists public.clientes (
   telefone text,
   email text,
   endereco text,
+  cep text,
+  bairro text,
+  cidade text,
+  uf text,
   created_at timestamptz default now()
 );
 
@@ -22,12 +26,15 @@ create table if not exists public.equipamentos (
   created_at timestamptz default now()
 );
 
+-- produtos:
+--  garantia_dias = dias de garantia ao vender (padrao 30)
 create table if not exists public.produtos (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   nome text not null,
   descricao text,
   preco_venda numeric(12,2) default 0,
+  garantia_dias integer default 30,
   created_at timestamptz default now()
 );
 
@@ -80,10 +87,12 @@ create table if not exists public.venda_itens (
   valor_total numeric(12,2) default 0
 );
 
+-- garantias:
+--  equipamento_id pode ser nulo quando a garantia vem de venda de produto
 create table if not exists public.garantias (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  equipamento_id uuid not null references public.equipamentos(id) on delete cascade,
+  equipamento_id uuid references public.equipamentos(id) on delete cascade,
   servico_id uuid references public.servicos(id) on delete set null,
   venda_id uuid references public.vendas(id) on delete set null,
   data_inicio date not null,
@@ -147,3 +156,11 @@ create policy "garantias_own" on public.garantias
 drop policy if exists "pagamentos_own" on public.pagamentos;
 create policy "pagamentos_own" on public.pagamentos
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Migracoes para bancos existentes (clientes + produtos + garantias)
+alter table public.clientes add column if not exists cep text;
+alter table public.clientes add column if not exists bairro text;
+alter table public.clientes add column if not exists cidade text;
+alter table public.clientes add column if not exists uf text;
+alter table public.produtos add column if not exists garantia_dias integer default 30;
+alter table public.garantias alter column equipamento_id drop not null;

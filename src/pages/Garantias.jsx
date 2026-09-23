@@ -3,6 +3,14 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { formatDate } from '../lib/format'
 
+const GARANTIA_PADRAO_DIAS = 90
+
+const addDays = (dateStr, days) => {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
 export default function Garantias() {
   const { user } = useAuth()
   const [garantias, setGarantias] = useState([])
@@ -11,6 +19,7 @@ export default function Garantias() {
   const [form, setForm] = useState({})
   const [equipamentos, setEquipamentos] = useState([])
   const [saving, setSaving] = useState(false)
+  const [dataFimManual, setDataFimManual] = useState(false)
 
   const load = async (tipo) => {
     let q = supabase
@@ -36,6 +45,7 @@ export default function Garantias() {
 
   const openNew = () => {
     setForm({ id: null, equipamento_id: '', data_inicio: '', data_fim: '', descricao: '' })
+    setDataFimManual(false)
     loadEquipamentos()
     setOpen(true)
   }
@@ -46,7 +56,16 @@ export default function Garantias() {
       id: g.id, equipamento_id: g.equipamento_id,
       data_inicio: g.data_inicio, data_fim: g.data_fim, descricao: g.descricao || '',
     })
+    setDataFimManual(true)
     setOpen(true)
+  }
+
+  const handleDataInicio = (valor) => {
+    setForm((f) => ({
+      ...f,
+      data_inicio: valor,
+      data_fim: dataFimManual ? f.data_fim : valor ? addDays(valor, GARANTIA_PADRAO_DIAS) : '',
+    }))
   }
 
   const save = async (e) => {
@@ -95,7 +114,7 @@ export default function Garantias() {
                 return (
                   <tr key={g.id}>
                     <td>{g.equipamentos?.clientes?.nome || '-'}</td>
-                    <td>{g.equipamentos?.tipo || ''} {g.equipamentos?.marca || ''}</td>
+                    <td>{g.equipamentos?.tipo ? `${g.equipamentos?.tipo} ${g.equipamentos?.marca || ''}` : (g.descricao || 'Produto')}</td>
                     <td>{formatDate(g.data_inicio)}</td>
                     <td>{formatDate(g.data_fim)}</td>
                     <td><span className={`badge badge-${situacao}`}>{situacao}</span></td>
@@ -129,11 +148,11 @@ export default function Garantias() {
                 <div className="form-row">
                   <div className="form-group">
                     <label>Data Início *</label>
-                    <input type="date" required value={form.data_inicio} onChange={(e) => setForm({ ...form, data_inicio: e.target.value })} />
+                    <input type="date" required value={form.data_inicio} onChange={(e) => handleDataInicio(e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label>Data Fim *</label>
-                    <input type="date" required value={form.data_fim} onChange={(e) => setForm({ ...form, data_fim: e.target.value })} />
+                    <input type="date" required value={form.data_fim} onChange={(e) => { setDataFimManual(true); setForm({ ...form, data_fim: e.target.value }) }} />
                   </div>
                 </div>
                 <div className="form-group">

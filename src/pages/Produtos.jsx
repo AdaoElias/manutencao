@@ -9,7 +9,7 @@ export default function Produtos() {
   const [produtos, setProdutos] = useState([])
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ id: null, nome: '', descricao: '', preco_venda: 0 })
+  const [form, setForm] = useState({ id: null, nome: '', descricao: '', preco_venda: 0, garantia_dias: 30 })
   const [saving, setSaving] = useState(false)
 
   const load = async () => {
@@ -26,12 +26,12 @@ export default function Produtos() {
   const filtered = produtos.filter((p) => p.nome.toLowerCase().includes(search.toLowerCase()))
 
   const openEdit = (p) => {
-    setForm({ id: p.id, nome: p.nome, descricao: p.descricao || '', preco_venda: p.preco_venda })
+    setForm({ id: p.id, nome: p.nome, descricao: p.descricao || '', preco_venda: p.preco_venda, garantia_dias: p.garantia_dias || 30 })
     setOpen(true)
   }
 
   const openNew = () => {
-    setForm({ id: null, nome: '', descricao: '', preco_venda: 0 })
+    setForm({ id: null, nome: '', descricao: '', preco_venda: 0, garantia_dias: 30 })
     setOpen(true)
   }
 
@@ -39,19 +39,20 @@ export default function Produtos() {
     e.preventDefault()
     setSaving(true)
     try {
+      const payload = {
+        nome: form.nome,
+        descricao: form.descricao,
+        preco_venda: form.preco_venda,
+        garantia_dias: parseInt(form.garantia_dias, 10) || 0,
+      }
       if (form.id) {
         await supabase
           .from('produtos')
-          .update({ nome: form.nome, descricao: form.descricao, preco_venda: form.preco_venda })
+          .update(payload)
           .eq('id', form.id)
           .eq('user_id', user.id)
       } else {
-        await supabase.from('produtos').insert({
-          user_id: user.id,
-          nome: form.nome,
-          descricao: form.descricao,
-          preco_venda: form.preco_venda,
-        })
+        await supabase.from('produtos').insert({ user_id: user.id, ...payload })
       }
       setOpen(false)
       load()
@@ -79,17 +80,18 @@ export default function Produtos() {
         <div className="table-wrap">
           <table className="table">
             <thead>
-              <tr><th>Nome</th><th>Descrição</th><th>Preço Venda</th><th style={{ width: 100 }}>Ações</th></tr>
+              <tr><th>Nome</th><th>Descrição</th><th>Preço Venda</th><th>Garantia</th><th style={{ width: 100 }}>Ações</th></tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={4} className="text-center">Nenhum produto encontrado</td></tr>
+                <tr><td colSpan={5} className="text-center">Nenhum produto encontrado</td></tr>
               )}
               {filtered.map((p) => (
                 <tr key={p.id}>
                   <td><strong>{p.nome}</strong></td>
                   <td>{p.descricao || '-'}</td>
                   <td>{formatMoney(p.preco_venda)}</td>
+                  <td>{p.garantia_dias ? `${p.garantia_dias} dias` : '-'}</td>
                   <td className="actions">
                     <button className="btn btn-sm btn-primary" onClick={() => openEdit(p)}>Editar</button>
                     <button className="btn btn-sm btn-danger" onClick={() => remove(p.id)}>Excluir</button>
@@ -123,6 +125,15 @@ export default function Produtos() {
                   <MoneyInput
                     value={form.preco_venda}
                     onChange={(v) => setForm({ ...form, preco_venda: v })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Garantia (em dias)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.garantia_dias}
+                    onChange={(e) => setForm({ ...form, garantia_dias: e.target.value })}
                   />
                 </div>
               </div>

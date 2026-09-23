@@ -313,6 +313,13 @@ body {
   min-height: 60px;
 }
 
+.form-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #4f8cff;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

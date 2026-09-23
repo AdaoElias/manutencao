@@ -4,6 +4,12 @@ import { useAuth } from '../context/AuthContext'
 import { formatMoney, formatDate } from '../lib/format'
 import PagamentoModal from '../components/PagamentoModal'
 
+const addDays = (dateStr, days) => {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
 export default function Vendas() {
   const { user } = useAuth()
   const [vendas, setVendas] = useState([])
@@ -22,7 +28,7 @@ export default function Vendas() {
     const [vd, cl, pr] = await Promise.all([
       supabase.from('vendas').select('*, clientes(nome)').eq('user_id', user.id).order('data_venda', { ascending: false }),
       supabase.from('clientes').select('id, nome').eq('user_id', user.id).order('nome'),
-      supabase.from('produtos').select('id, nome, descricao, preco_venda').eq('user_id', user.id).order('nome'),
+      supabase.from('produtos').select('id, nome, descricao, preco_venda, garantia_dias').eq('user_id', user.id).order('nome'),
     ])
     setVendas(vd.data ?? [])
     setClientes(cl.data ?? [])
@@ -78,6 +84,7 @@ export default function Vendas() {
         quantidade: qtd,
         valor_unitario: Number(produto.preco_venda) || 0,
         valor_total: qtd * (Number(produto.preco_venda) || 0),
+        garantia_dias: Number(produto.garantia_dias) || 30,
       }]
     })
   }
@@ -136,6 +143,24 @@ export default function Vendas() {
       }))
       const { error: itErr } = await supabase.from('venda_itens').insert(itens)
       if (itErr) throw itErr
+
+      if (form.id) {
+        await supabase.from('garantias').delete().eq('venda_id', vendaId).eq('user_id', user.id)
+      }
+      const hoje = new Date().toISOString().split('T')[0]
+      const garantias = carrinho
+        .filter((i) => Number(i.garantia_dias) > 0)
+        .map((i) => ({
+          user_id: user.id,
+          venda_id: vendaId,
+          data_inicio: hoje,
+          data_fim: addDays(hoje, Number(i.garantia_dias) || 30),
+          descricao: i.descricao,
+        }))
+      if (garantias.length > 0) {
+        const { error: gErr } = await supabase.from('garantias').insert(garantias)
+        if (gErr) throw gErr
+      }
 
       setOpen(false)
       setCarrinho([])
