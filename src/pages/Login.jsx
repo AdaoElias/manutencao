@@ -16,10 +16,10 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const { error } =
+      const { data, error } =
         mode === 'login' ? await signIn(email, password) : await signUp(email, password)
       if (error) throw error
-      if (mode === 'signup') {
+      if (mode === 'signup' && !data?.session?.user) {
         setError('Conta criada. Verifique seu e-mail para confirmar e depois entre.')
         setMode('login')
       } else {
