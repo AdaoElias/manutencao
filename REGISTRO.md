@@ -14,7 +14,13 @@ resoluções** desta sessão de trabalho sobre o **TechService Manager**.
 6. [Rotina de montagem das páginas](#6-rotina-de-montagem-das-páginas)
 7. [Publicação no GitHub](#7-publicação-no-github)
 8. [Itens criados (estrutura final)](#8-itens-criados-estrutura-final)
-9. [Pendências e próximos passos](#9-pendências-e-próximos-passos)
+9. [Correções críticas (análise)](#9-correções-críticas-análise)
+10. [Recriação da infraestrutura Supabase](#10-recriação-da-infraestrutura-supabase)
+11. [Cadastro sem confirmação de e-mail](#11-cadastro-sem-confirmação-de-e-mail)
+12. [Clientes: telefone e endereço via CEP](#12-clientes-telefone-e-endereço-via-cep)
+13. [Garantias automáticas (produtos e serviços)](#13-garantias-automáticas-produtos-e-serviços)
+14. [Autocomplete de tipo e marca em Equipamentos](#14-autocomplete-de-tipo-e-marca-em-equipamentos)
+15. [Pendências e próximos passos](#15-pendências-e-próximos-passos)
 
 ---
 
@@ -222,17 +228,107 @@ src/
 
 ---
 
-## 9. Pendências e próximos passos
+## 9. Correções críticas (análise)
 
-- [ ] (Obrigatório) Adicionar os **2 secrets** no repositório GitHub
-      (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) — sem eles o build gera
-      bundle sem chaves e a app quebra (`supabaseUrl is required`, tela branca).
-- [ ] Confirmar **GitHub Pages (Source: GitHub Actions)** ativo no repo
-      (senão o passo "Setup Pages" do workflow falha).
-- [ ] Confirmar que a tabela `pagamentos` foi criada no Supabase
-      (rodar `supabase/runnable_schema.sql` no SQL Editor).
-- [ ] Ativar **Auth por e-mail** no Supabase (Authentication → Providers → Email)
-      e decidir se exige confirmação de e-mail.
-- [ ] Criar conta de usuário no app para começar a usar.
-- [ ] (Opcional) Testar login/uso no link público após o deploy.
-- [ ] (Opcional) Instalar o **GitHub CLI (`gh`)** para facilitar futuros deploys/repos.
+Análise completa do projeto identificou dois problemas críticos, corrigidos em
+`f1e8dab`:
+
+- **Listas vazias por ordenação inválida.** `Servicos.jsx`, `Vendas.jsx` e
+  `Dashboard.jsx` ordenavam por `created_at`, coluna inexistente nas tabelas
+  `servicos` e `vendas` (que usam `data_abertura`/`data_venda`). Como os erros
+  eram engolidos por `?? []`, Serviços, Vendas e o Dashboard exibiam listas
+  vazias sem aviso. Corrigido para ordenar por `data_abertura`/`data_venda`.
+- **Semântica financeira.** Dashboard (`Dashboard.jsx`) e Contas a Receber
+  (`ContasReceber.jsx`) somavam "Pendente/Atrasado" com `valor_pago` (parcela
+  paga) e "Recebido" com `valor_total`, gerando contagens duplas/rotulagem
+  errada em pagamentos parcelados. Nova regra única: **Recebido** = soma de
+  `valor_pago` (exceto cancelados); **Pendente/Atrasado** = soma de
+  `valor_total − valor_pago`. `marcarPago` e `registrarParcela` agora gravam
+  `valor_pago` corretamente.
+
+---
+
+## 10. Recriação da infraestrutura Supabase
+
+**Problema:** o projeto Supabase original (`faedzxhnmomwdeysqlmj` a.k.a.
+`f-...-sqlmj`) ficou **pausado por inatividade** e não pôde ser restaurado
+(travou em "Project is coming up" por mais de 1h, com 38 erros na dashboard).
+
+**Decisão do usuário:** começar do zero (dados antigos não preservados).
+
+**Feito:**
+1. Novo projeto criado em `https://nhcnyjbuwwkewixuxloi.supabase.co`.
+2. Schema reaplicado no **SQL Editor** (`supabase/runnable_schema.sql` — 9
+   tabelas + 8 políticas RLS) e **Auth por e-mail** ativado.
+3. `.env` local atualizado com a Project URL + chave publishable novas.
+4. Conectividade validada via Node (tabelas respondendo, auth OK).
+
+**Pendente (GitHub):** atualizar os secrets do repositório — o site publicado
+ainda aponta para o projeto antigo até `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`
+serem substituídos (botão **Update**) e o workflow reexecutado.
+
+---
+
+## 11. Cadastro sem confirmação de e-mail
+
+No novo projeto, **"Confirm email" está desligado** — logo nenhum e-mail de
+confirmação é enviado (criação já ativa). O `Login.jsx`, porém, sempre
+exibia "verifique seu e-mail" e não navegava após o cadastro.
+
+**Correção (`ee3e9d7`):** se o `signUp` já retornar sessão
+(`data?.session?.user`), o app **entra direto**; a mensagem de verificação só
+aparece quando a confirmação está de fato ligada.
+
+---
+
+## 12. Clientes: telefone e endereço via CEP
+
+Melhorias na tela de Clientes (`59dba32`):
+- **Máscara de telefone/celular** `(00) 00000-0000`.
+- **Busca de CEP pela API ViaCEP** — ao completar 8 dígitos, preenche
+  automaticamente Endereço, Bairro, Cidade e UF.
+- Novas colunas em `clientes`: `cep`, `bairro`, `cidade`, `uf`.
+
+---
+
+## 13. Garantias automáticas (produtos e serviços)
+
+- **Produtos**: campo `garantia_dias` (padrão **30**, editável) na tela e no
+  schema (`produtos.garantia_dias`).
+- **Garantias**: Data Fim preenchida automaticamente com **Data Início + 90
+  dias** (editável).
+- **Serviços (OS)**: ao mudar status para Concluído/Entregue, cria garantia
+  automática de **30 dias** para o equipamento (sem duplicar).
+- **Vendas**: ao salvar, cria garantia automática por item usando o prazo do
+  produto.
+- Schema: `garantias.equipamento_id` passou a ser **nullable** (garantia de
+  venda sem equipamento; a lista de garantias exibe a descrição do produto).
+
+---
+
+## 14. Autocomplete de tipo e marca em Equipamentos
+
+- Campos **Tipo** e **Marca** usam `<datalist>` com os valores já cadastrados
+  pelo usuário — o sistema **aprende com o uso**, evitando escritas divergentes.
+- Ao salvar, `tipo`/`marca` são **normalizados** (trim, espaços duplicados e
+  caixa — "lenovo" → "Lenovo"). As sugestões também são normalizadas, unindo
+  variações em uma única opção.
+
+---
+
+## 15. Pendências e próximos passos
+
+- [ ] **(Urgente)** Atualizar os **2 secrets** no repositório GitHub com o
+      projeto **novo** do Supabase (botão *Update* em `VITE_SUPABASE_URL` e
+      `VITE_SUPABASE_ANON_KEY`) e **reexecutar o workflow** — o site publicado
+      ainda aponta para o projeto antigo (pausado), sintoma: "Failed to fetch"
+      no login.
+- [ ] (Obrigatório) Confirmar **GitHub Pages (Source: GitHub Actions)** ativo
+      no repo (senão o passo "Setup Pages" do workflow falha).
+- [x] Rodar o schema no novo projeto Supabase (9 tabelas + RLS) — **feito**.
+- [x] Ativar **Auth por e-mail** no Supabase (Authentication → Providers →
+      Email; "Confirm email" **desligado** — cadastro entra direto) — **feito**.
+- [x] Criar conta de usuário no app para começar a usar — **feito**.
+- [ ] Testar o app no **link público** após atualizar os secrets.
+- [ ] (Opcional) Instalar o **GitHub CLI (`gh`)** para facilitar futuros
+      deploys/repos.

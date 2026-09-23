@@ -140,3 +140,58 @@ Isso elimina a classe de problemas dos campos numéricos que motivou a recriaç�
   (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) necessários para o build não
   gerar bundle sem chaves (sintoma: tela branca com `supabaseUrl is required`).
 - Roteamento em subcaminho resolvido com `basename` dinâmico em `main.jsx`.
+
+### Correções críticas (análise geral do projeto)
+Realizada análise completa do projeto; dois problemas críticos corrigidos:
+- **Listas vazias por ordenação inválida**: `order('created_at')` era usado nas
+  tabelas `servicos` e `vendas`, que **não têm** essa coluna (usam
+  `data_abertura`/`data_venda`). O erro era engolido por `?? []`, exibindo
+  telas vazias sem aviso. Corrigido em `Servicos.jsx`, `Vendas.jsx` e
+  `Dashboard.jsx`.
+- **Semântica financeira**: Dashboard e Contas a Receber somavam
+  Pendente/Atrasado com `valor_pago` (parcela paga) e Recebido com
+  `valor_total` — contagem dupla em onboarding parcelado. Agora:
+  Recebido = soma de `valor_pago` (exceto cancelados); Pendente/Atrasado =
+  `valor_total − valor_pago`. `marcarPago` e `registrarParcela` passaram a
+  gravar `valor_pago` corretamente.
+
+### Recriação da infraestrutura Supabase
+- O projeto Supabase original (`faedzxhnmomwdeysqlmj`) ficou **pausado por
+  inatividade** e não pôde ser restaurado (travado em "Project is coming up").
+- Decisão: **projeto novo** (`nhcnyjbuwwkewixuxloi`), recomeçando do zero.
+- Schema reaplicado no **SQL Editor** (as 9 tabelas + RLS) e Auth por e-mail
+  ativado. `.env` local atualizado com URL + chave publishable novas.
+- **Observação:** o deploy publicado só passa a usar o novo projeto depois que
+  os **secrets `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`** no GitHub forem
+  atualizados e o workflow for reexecutado.
+
+### Cadastro sem confirmação de e-mail
+- No projeto, "Confirm email" está **desligado** — nenhum e-mail de confirmação
+  é enviado (comportamento correto do Supabase).
+- O app, porém, sempre mostrava "verifique seu e-mail" após o cadastro e não
+  navegava. Corrigido em `Login.jsx`: se a resposta do `signUp` já trouxer
+  sessão, o usuário entra direto; a mensagem de verificação só aparece quando a
+  confirmação está de fato ligada.
+
+### Clientes: máscara de telefone e endereço via CEP
+- Máscara de telefone/celular `(00) 00000-0000` no cadastro de cliente.
+- **Busca de CEP pela API ViaCEP**: ao digitar 8 dígitos, preenche
+  automaticamente Endereço, Bairro, Cidade e UF.
+- Novas colunas em `clientes`: `cep`, `bairro`, `cidade`, `uf`.
+
+### Garantias automáticas (produtos e serviços)
+- **Produtos**: novo campo `garantia_dias` (padrão **30**, editável).
+- **Garantias**: ao informar a Data Início, a Data Fim é preenchida
+  automaticamente com **+90 dias** (editável).
+- **Serviços (OS)**: ao concluir/entregar, o sistema cria garantia automática
+  de **30 dias** para o equipamento (sem duplicar).
+- **Vendas**: ao salvar, cria garantia automática por item, usando o prazo do
+  produto.
+- `garantias.equipamento_id` passou a aceitar nulo (garantia por venda de
+  produto, sem equipamento).
+
+### Autocomplete de tipo e marca em Equipamentos
+- Campos **Tipo** e **Marca** agora sugerem (autocomplete) os valores já
+  utilizados pelo usuário — o sistema "aprende com o uso".
+- Escrita normalizada ao salvar (espaços extras/duplicadas e caixa): evita
+  variações divergentes como "lenovo" / "LEnovo".
